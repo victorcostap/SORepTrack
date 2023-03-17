@@ -18,8 +18,8 @@ CLIENT_ID = '25628'
 REDIRECT_URI = 'https://stackexchange.com'
 SCOPE = 'no_expiry'
 
-NUM_QUESTIONS = 15
-MAX_DEPTH = 10
+NUM_QUESTIONS = 5
+MAX_DEPTH = 15
 MAX_REQUEST_PER_SECOND = 20
 REPUTATION_THRESHOLD = 0
 
@@ -162,17 +162,18 @@ def get_user_relationships(user_ids: List[Union[int, str]], token: str, depth: i
         user_top_tag = get_user_top_tag(user_id, token)
         if user_top_tag is not None:
             top_answers = get_answers_to_top_questions_tag(user_id, token, user_top_tag)
-            answers_ids = [str(answer["answer_id"]) for answer in top_answers]
-            ans_users_ids = get_user_ids_from_answers(answers_ids, token)
-            for answer in ans_users_ids:
-                edge = {
-                    'source': user_id,
-                    'target': answer["user_id"],
-                    'score': answer["score"],
-                    'ans_id': answer["answer_id"]
-                }
-                edges.append(edge)
-                new_users_ids.append(answer["user_id"])
+            if len(top_answers) > 0:
+                answers_ids = [str(answer["answer_id"]) for answer in top_answers]
+                ans_users_ids = get_user_ids_from_answers(answers_ids, token)
+                for answer in ans_users_ids:
+                    edge = {
+                        'source': user_id,
+                        'target': answer["user_id"],
+                        'score': answer["score"],
+                        'ans_id': answer["answer_id"]
+                    }
+                    edges.append(edge)
+                    new_users_ids.append(answer["user_id"])
 
         node = {
             'user_id': user_id,
@@ -183,7 +184,7 @@ def get_user_relationships(user_ids: List[Union[int, str]], token: str, depth: i
         nodes.append(node)
 
         print(
-            f"{' ' * (depth - 1)}{depth} - User: {user_info['display_name']} (Reputation: {user_info['reputation']}, Top "
+            f"{' ' * (depth - 1)}{depth} - User: {user_info['display_name']} (Reputation: {user_info['reputation']}, "
             f"Top tag: {user_top_tag} Top answers: {answers_ids})")
 
         if len(new_users_ids) > 0:
@@ -235,6 +236,7 @@ if __name__ == "__main__":
         'access_token': access_token
     }
     init_user_id = "4357115"
+    #init_user_id = "276068"
     # Call the function to retrieve user relationships and reputations recursively up to a depth of 5
     data_nodes, data_edges = get_user_relationships([init_user_id], access_token, 1, REPUTATION_THRESHOLD)
     write_nodes_to_csv(data_nodes, "nodes.csv")
