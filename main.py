@@ -19,10 +19,10 @@ REDIRECT_URI = 'https://stackexchange.com'
 SCOPE = 'no_expiry'
 
 NUM_QUESTIONS = 15
-MAX_DEPTH = 10
+MAX_DEPTH = 5
 MAX_REQUEST_PER_SECOND = 20
 REPUTATION_THRESHOLD = 0
-
+NUM_TAGS = 5
 analyzed_users = set()
 
 time_last_request = 0
@@ -60,8 +60,9 @@ def send_request(url: str, token: str) -> str:
     return response_json
 
 
-def get_answers_to_top_questions_tag(user_id, token, tag, num_of_questions=NUM_QUESTIONS):
-    url = API_BASE_URL + API_USERS_ENDPOINT.format(user_ids=user_id) + f"/tags/{quote(tag)}/top-questions" \
+def get_answers_to_top_questions_tag(user_id, token, tags, num_of_questions=NUM_QUESTIONS):
+    tags_str = ";".join(quote(x) for x in tags)
+    url = API_BASE_URL + API_USERS_ENDPOINT.format(user_ids=user_id) + f"/tags/{tags_str}/top-questions" \
                                                                               f"?pagesize={2*num_of_questions}&order" \
                                                                               f"=desc&sort=votes&site=stackoverflow"
     response_data = send_request(url, token)
@@ -130,8 +131,9 @@ def get_users_info(user_ids: List[Union[int, str]], token: str) -> Dict:
 
 
 # Define function to retrieve user's most used programming language
-def get_user_top_tag(user_id: int, token: str) -> str:
-    url = API_BASE_URL + API_USERS_ENDPOINT.format(user_ids=user_id) + '/top-tags?pagesize=1&site=stackoverflow'
+def get_user_top_tags(user_id: int, token: str, num_tags: int = 1) -> str:
+    url = API_BASE_URL + API_USERS_ENDPOINT.format(user_ids=user_id) + f'/top-tags?pagesize={num_tags}&site' \
+                                                                       f'=stackoverflow'
     response_data = send_request(url, token)
     if "items" not in response_data:
         raise Exception("Response is missing expected key 'items'")
@@ -139,8 +141,9 @@ def get_user_top_tag(user_id: int, token: str) -> str:
     if len(items) == 0:
         return None
 
-    top_tag = unquote(items[0]['tag_name'])
-    return top_tag
+    num_tags = min(num_tags, len(items))
+    top_tags = [items[i]["tag_name"] for i in range(num_tags)]
+    return top_tags
 
 
 # Define function to recursively retrieve user relationships and reputations up to a depth of 5
@@ -159,9 +162,9 @@ def get_user_relationships(user_ids: List[Union[int, str]], token: str, depth: i
 
         answers_ids = []
         new_users_ids = []
-        user_top_tag = get_user_top_tag(user_id, token)
-        if user_top_tag is not None:
-            top_answers = get_answers_to_top_questions_tag(user_id, token, user_top_tag)
+        user_top_tags = get_user_top_tags(user_id, token, NUM_TAGS)
+        if user_top_tags is not None:
+            top_answers = get_answers_to_top_questions_tag(user_id, token, user_top_tags)
             answers_ids = [str(answer["answer_id"]) for answer in top_answers]
             ans_users_ids = get_user_ids_from_answers(answers_ids, token)
             for answer in ans_users_ids:
@@ -177,14 +180,14 @@ def get_user_relationships(user_ids: List[Union[int, str]], token: str, depth: i
         node = {
             'user_id': user_id,
             'name': user_info["display_name"],
-            'question_tag': user_top_tag,
+            'question_tag': user_top_tags[0],
             'reputation': user_info["reputation"]
         }
         nodes.append(node)
 
         print(
             f"{' ' * (depth - 1)}{depth} - User: {user_info['display_name']} (Reputation: {user_info['reputation']}, Top "
-            f"Top tag: {user_top_tag} Top answers: {answers_ids})")
+            f"Top tag: {user_top_tags} Top answers: {answers_ids})")
 
         if len(new_users_ids) > 0:
             new_nodes, new_edges = get_user_relationships(new_users_ids, token, depth + 1)
